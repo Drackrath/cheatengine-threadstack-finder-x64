@@ -27,10 +27,10 @@ int main(int argc, char** argv) {
 	}
 
 	HANDLE hProcHandle = NULL;
-	
-	printf("PID %d (0x%x)\n", dwProcID, dwProcID);
+
+	printf("PID %" PRIu64 " (0x%" PRIx64 ")\n", dwProcID, dwProcID);
 	std::cout << "Grabbing handle" << std::endl;
-	hProcHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcID);
+	hProcHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, static_cast<DWORD>(dwProcID)); // Korrigierte Zeile
 
 	if (hProcHandle == INVALID_HANDLE_VALUE || hProcHandle == NULL) {
 		std::cerr << "Failed to open process -- invalid handle" << std::endl;
@@ -40,18 +40,19 @@ int main(int argc, char** argv) {
 	else {
 		std::cout << "Success" << std::endl;
 	}
-	
+
 	std::vector<uint64_t> threadId = threadList(dwProcID);
 	uint64_t stackNum = 0;
 	for (auto it = threadId.begin(); it != threadId.end(); ++it) {
-		HANDLE threadHandle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, *it);
+		HANDLE threadHandle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, static_cast<DWORD>(*it)); // Korrigierte Zeile
 		uint64_t threadStartAddress = GetThreadStartAddress(hProcHandle, threadHandle);
-		printf("TID: 0x% " PRIx64 " = THREADSTACK%2d BASE ADDRESS: 0x%" PRIx64 "\n", *it, stackNum, threadStartAddress);
+		printf("TID: 0x%" PRIx64 " = THREADSTACK%2" PRIu64 " BASE ADDRESS: 0x%" PRIx64 "\n", *it, stackNum, threadStartAddress);
 		stackNum++;
 	}
 
 	return EXIT_SUCCESS;
 }
+
 
 std::vector<uint64_t> threadList(uint64_t pid) {
 	/* solution from http://stackoverflow.com/questions/1206878/enumerating-threads-in-windows */
@@ -86,7 +87,12 @@ uint64_t GetThreadStartAddress(HANDLE processHandle, HANDLE hThread) {
 
 	MODULEINFO mi;
 
-	GetModuleInformation(processHandle, GetModuleHandle("kernel32.dll"), &mi, sizeof(mi));
+    HMODULE hModule = GetModuleHandle(L"kernel32.dll");
+    if (hModule == NULL) {
+        std::cerr << "Failed to get module handle for kernel32.dll" << std::endl;
+        return EXIT_FAILURE;
+    }
+    GetModuleInformation(processHandle, hModule, &mi, sizeof(mi));
 	stacktop = (uint64_t)GetThreadStackTopAddress_x86(processHandle, hThread);
 
 	/* The stub below has the same result as calling GetThreadStackTopAddress_x86() 
@@ -132,7 +138,7 @@ uint64_t GetThreadStartAddress(HANDLE processHandle, HANDLE hThread) {
 			}
 		}
 
-		delete buf32;
+        delete[] buf32;
 	}
 
 	return result;
